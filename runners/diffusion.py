@@ -81,14 +81,14 @@ class Diffusion(object):
         self.num_timesteps = betas.shape[0]
 
         alphas = 1.0 - betas
-        alphas_cumprod = alphas.cumprod(dim=0)
+        alphas_cumprod = alphas.cumprod(dim=0)  # alpha_bar_t
         alphas_cumprod_prev = torch.cat(
             [torch.ones(1).to(device), alphas_cumprod[:-1]], dim=0
-        )
+        )  # alpha_bar_t-1
         posterior_variance = (
             betas * (1.0 - alphas_cumprod_prev) / (1.0 - alphas_cumprod)
         )
-        if self.model_var_type == "fixedlarge":
+        if self.model_var_type == "fixedlarge":  # 方差的两种取值方式: beta_t beta_bar_t
             self.logvar = betas.log()
             # torch.cat(
             # [posterior_variance[1:2], betas[1:]], dim=0).log()
@@ -340,16 +340,16 @@ class Diffusion(object):
             skip = 1
 
         if self.args.sample_type == "generalized":
-            if self.args.skip_type == "uniform":
+            if self.args.skip_type == "uniform":  # 线性采样
                 skip = self.num_timesteps // self.args.timesteps
                 seq = range(0, self.num_timesteps, skip)
-            elif self.args.skip_type == "quad":
+            elif self.args.skip_type == "quad":  # 二次方采样
                 seq = (
                     np.linspace(
                         0, np.sqrt(self.num_timesteps * 0.8), self.args.timesteps
                     )
                     ** 2
-                )
+                )  # 采样值越来越大的self.args.timesteps个值, 如[0. 0.98765432  3.95061728  8.88888889 15.80246914 24.69135802 35.55555556 48.39506173 63.20987654 80]
                 seq = [int(s) for s in list(seq)]
             else:
                 raise NotImplementedError

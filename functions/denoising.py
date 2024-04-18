@@ -7,7 +7,7 @@ def compute_alpha(beta, t):
     return a
 
 
-def generalized_steps(x, seq, model, b, **kwargs):
+def generalized_steps(x, seq, model, b, **kwargs):  # ddim的采样方式
     with torch.no_grad():
         n = x.size(0)
         seq_next = [-1] + list(seq[:-1])
@@ -16,23 +16,23 @@ def generalized_steps(x, seq, model, b, **kwargs):
         for i, j in zip(reversed(seq), reversed(seq_next)):
             t = (torch.ones(n) * i).to(x.device)
             next_t = (torch.ones(n) * j).to(x.device)
-            at = compute_alpha(b, t.long())
-            at_next = compute_alpha(b, next_t.long())
+            at = compute_alpha(b, t.long())  # alpha_bar_t
+            at_next = compute_alpha(b, next_t.long())  # alpha_bar_t-1
             xt = xs[-1].to('cuda')
             et = model(xt, t)
             x0_t = (xt - et * (1 - at).sqrt()) / at.sqrt()
             x0_preds.append(x0_t.to('cpu'))
             c1 = (
-                kwargs.get("eta", 0) * ((1 - at / at_next) * (1 - at_next) / (1 - at)).sqrt()
+                kwargs.get("eta", 0) * ((1 - at / at_next) * (1 - at_next) / (1 - at)).sqrt()  # c1表示delta, ddim则取0 ddpm则需要将eta设置为1
             )
             c2 = ((1 - at_next) - c1 ** 2).sqrt()
-            xt_next = at_next.sqrt() * x0_t + c1 * torch.randn_like(x) + c2 * et
+            xt_next = at_next.sqrt() * x0_t + c1 * torch.randn_like(x) + c2 * et  # 论文中的eq(12)
             xs.append(xt_next.to('cpu'))
 
     return xs, x0_preds
 
 
-def ddpm_steps(x, seq, model, b, **kwargs):
+def ddpm_steps(x, seq, model, b, **kwargs):  # ddpm的采样
     with torch.no_grad():
         n = x.size(0)
         seq_next = [-1] + list(seq[:-1])
@@ -42,8 +42,8 @@ def ddpm_steps(x, seq, model, b, **kwargs):
         for i, j in zip(reversed(seq), reversed(seq_next)):
             t = (torch.ones(n) * i).to(x.device)
             next_t = (torch.ones(n) * j).to(x.device)
-            at = compute_alpha(betas, t.long())
-            atm1 = compute_alpha(betas, next_t.long())
+            at = compute_alpha(betas, t.long())  # alpha_bar_t
+            atm1 = compute_alpha(betas, next_t.long())  # alpha_bar_t-1
             beta_t = 1 - at / atm1
             x = xs[-1].to('cuda')
 
@@ -59,7 +59,7 @@ def ddpm_steps(x, seq, model, b, **kwargs):
 
             mean = mean_eps
             noise = torch.randn_like(x)
-            mask = 1 - (t == 0).float()
+            mask = 1 - (t == 0).float()  # t>1 noise取高斯分布, t=0 noise取0
             mask = mask.view(-1, 1, 1, 1)
             logvar = beta_t.log()
             sample = mean + mask * torch.exp(0.5 * logvar) * noise
